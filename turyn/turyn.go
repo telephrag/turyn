@@ -4,11 +4,9 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"log"
 	"os"
 	"path/filepath"
-	"sync/atomic"
-	"time"
+	"sync"
 )
 
 type Turyn struct {
@@ -23,60 +21,8 @@ func New() *Turyn {
 	}
 }
 
-// left to be for benchmarking later
-func (t *Turyn) GatherFS(workDir string, wdf fs.WalkDirFunc) error {
-	return fs.WalkDir(os.DirFS(workDir), ".", wdf)
-}
-
 func (t *Turyn) Gather(workDir string, wdf fs.WalkDirFunc) error {
 	return filepath.WalkDir(workDir, wdf)
-}
-
-func (t *Turyn) Process(fout *os.File, baseOffset int64, ncpu int) {
-
-	var writersRunning atomic.Int32
-	var writeOffset int64
-	for i := range t.files {
-		// TODO: benchmark this compared to idiomatic channel implementation
-		for writersRunning.Load() >= int32(ncpu) {
-			time.Sleep(time.Millisecond)
-		}
-
-		writersRunning.Add(1)
-		go func(idx int, off int64) {
-			defer writersRunning.Add(-1)
-
-			r, err := os.OpenFile(t.files[idx], os.O_RDONLY, 0644)
-			if err != nil {
-				log.Fatalf("error opening %s for reading: %s\n",
-					t.files[idx],
-					err,
-				)
-			}
-			defer r.Close()
-
-			w := io.NewOffsetWriter(fout, off)
-
-			fmt.Fprintf(w, "||| %s\n", t.files[idx])
-			_, err = io.Copy(w, r)
-			if err != nil {
-				log.Fatalf("error copying contents of %s into output: %s\n",
-					t.files[idx],
-					err,
-				)
-			}
-			fmt.Fprint(w, "\n\n")
-
-			// fmt.Printf("%10d %s\n", off, t.files[idx]) // TODO: add -v flag
-
-		}(i, writeOffset)
-
-		writeOffset += (t.sizes[i] + 7 + int64(len(t.files[i])))
-	}
-
-	for writersRunning.Load() > 0 {
-		time.Sleep(time.Millisecond)
-	}
 }
 
 // Shamelessly stolen from chi
@@ -91,29 +37,84 @@ func (t *Turyn) Chain(middleware ...Middleware) fs.WalkDirFunc {
 	return wdf
 }
 
-func (t *Turyn) Default(next fs.WalkDirFunc) fs.WalkDirFunc {
+func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 	return fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
 		if d == nil {
 			panic("DirEntry is nil")
 		}
 
 		if !d.IsDir() {
-			info, err := d.Info()
-			if err != nil {
-				return Err(path, err)
-			}
-
-			t.files = append(t.files, path)
-			t.sizes = append(t.sizes, info.Size())
-
-			//	fmt.Printf("%10d %s\n", info.Size(), path) // debug
+			return next(path, d, err)
 		}
+
+		return nil
+	})
+}
+
+func (t *Turyn) Default(next fs.WalkDirFunc) fs.WalkDirFunc {
+	return fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
+		info, err := d.Info()
+		if err != nil {
+			return Err(path, err)
+		}
+
+		t.files = append(t.files, path)
+		t.sizes = append(t.sizes, info.Size())
+
+		//	fmt.Printf("%10d %s\n", info.Size(), path) // debug
 
 		return next(path, d, err)
 	})
 }
 
 func (t *Turyn) dummy(path string, d fs.DirEntry, err error) error {
+	return nil
+}
+
+func (t *Turyn) Process(fout *os.File, baseOffset int64, ncpu int) {
+	var writeOffset int64
+	var wg sync.WaitGroup
+	writers := make(chan struct{}, ncpu)
+	for i := range t.files {
+		writers <- struct{}{}
+		wg.Add(1)
+		go func(idx int, off int64) {
+			t.WriteFile(idx, off, fout)
+			<-writers
+			wg.Done()
+		}(i, writeOffset)
+
+		writeOffset += (t.sizes[i] + 7 + int64(len(t.files[i])))
+	}
+
+	wg.Wait()
+}
+
+func (t *Turyn) WriteFile(i int, off int64, fout *os.File) error {
+	r, err := os.OpenFile(t.files[i], os.O_RDONLY, 0644)
+	if err != nil {
+		return fmt.Errorf("error opening %s for reading: %w\n",
+			t.files[i],
+			err,
+		)
+	}
+	defer r.Close()
+
+	// TODO: is creating these thread safe?
+	w := io.NewOffsetWriter(fout, off)
+
+	fmt.Fprintf(w, "||| %s\n", t.files[i])
+	_, err = io.Copy(w, r)
+	if err != nil {
+		return fmt.Errorf("error copying contents of %s into output: %w\n",
+			t.files[i],
+			err,
+		)
+	}
+	fmt.Fprint(w, "\n\n")
+
+	// fmt.Printf("%10d %s\n", off, t.files[idx]) // TODO: add -v flag
+
 	return nil
 }
 
@@ -124,10 +125,4 @@ func (t *Turyn) GetTotalSize() int64 {
 		totalSize += (7 + int64(len(t.files[i])) + t.sizes[i])
 	}
 	return totalSize
-}
-
-// testing util
-func (t *Turyn) Clear() {
-	t.files = make([]string, 0)
-	t.sizes = make([]int64, 0)
 }

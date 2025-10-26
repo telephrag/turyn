@@ -22,8 +22,8 @@ bench() {
         cd ..
     fi
     
-    go test -bench=. -count=1000
-    rm test.tur >/dev/null 2>&1
+    go test -v -bench . -benchtime=1000x
+    rm test_*.tur >/dev/null 2>&1
 }
 
 #install() {
