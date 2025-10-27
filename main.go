@@ -12,19 +12,19 @@ import (
 func init() { log.SetFlags(0) }
 
 func main() {
-	wd := *flag.String("d", ".", "Working directory with files to join.")
+	wd := flag.String("d", ".", "Working directory with files to join.")
 	flag.Parse()
 
-	_, err := os.Stat(wd)
+	_, err := os.Stat(*wd)
 	if err != nil {
 		log.Fatalln("Failed to stat rootpath.")
 	}
 
 	t := turyn.New()
 
-	chain := []turyn.Middleware{t.CheckIfDir, t.Default}
+	chain := []turyn.Middleware{t.CheckIfDir, t.CollectPathSize}
 
-	if err := t.Gather(wd, t.Chain(chain...)); err != nil {
+	if err := t.Gather(*wd, t.Chain(chain...)); err != nil {
 		log.Fatalln(err)
 	}
 

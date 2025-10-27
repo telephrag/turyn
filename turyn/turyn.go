@@ -21,11 +21,6 @@ func New() *Turyn {
 	}
 }
 
-func (t *Turyn) Gather(workDir string, wdf fs.WalkDirFunc) error {
-	return filepath.WalkDir(workDir, wdf)
-}
-
-// Shamelessly stolen from chi
 type Middleware func(fs.WalkDirFunc) fs.WalkDirFunc
 
 func (t *Turyn) Chain(middleware ...Middleware) fs.WalkDirFunc {
@@ -37,6 +32,11 @@ func (t *Turyn) Chain(middleware ...Middleware) fs.WalkDirFunc {
 	return wdf
 }
 
+func (t *Turyn) Gather(workDir string, wdf fs.WalkDirFunc) error {
+	return filepath.WalkDir(workDir, wdf)
+}
+
+// Shamelessly stolen from chi
 func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 	return fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
 		if d == nil {
@@ -44,6 +44,7 @@ func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 		}
 
 		if !d.IsDir() {
+			fmt.Println(path)
 			return next(path, d, err)
 		}
 
@@ -51,7 +52,7 @@ func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 	})
 }
 
-func (t *Turyn) Default(next fs.WalkDirFunc) fs.WalkDirFunc {
+func (t *Turyn) CollectPathSize(next fs.WalkDirFunc) fs.WalkDirFunc {
 	return fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
 		info, err := d.Info()
 		if err != nil {
@@ -103,6 +104,8 @@ func (t *Turyn) WriteFile(i int, off int64, fout *os.File) error {
 	// TODO: is creating these thread safe?
 	w := io.NewOffsetWriter(fout, off)
 
+	fmt.Fprint(w, "\n")
+
 	fmt.Fprintf(w, "||| %s\n", t.files[i])
 	_, err = io.Copy(w, r)
 	if err != nil {
@@ -111,7 +114,7 @@ func (t *Turyn) WriteFile(i int, off int64, fout *os.File) error {
 			err,
 		)
 	}
-	fmt.Fprint(w, "\n\n")
+	fmt.Fprint(w, "\n")
 
 	// fmt.Printf("%10d %s\n", off, t.files[idx]) // TODO: add -v flag
 
