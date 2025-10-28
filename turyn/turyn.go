@@ -28,7 +28,6 @@ func (t *Turyn) Chain(middleware ...Middleware) fs.WalkDirFunc {
 	for i := len(middleware) - 2; i >= 0; i-- {
 		wdf = middleware[i](wdf)
 	}
-
 	return wdf
 }
 
@@ -44,7 +43,7 @@ func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 		}
 
 		if !d.IsDir() {
-			fmt.Println(path)
+			// fmt.Println(path) // debug
 			return next(path, d, err)
 		}
 
@@ -87,7 +86,6 @@ func (t *Turyn) Process(fout *os.File, baseOffset int64, ncpu int) {
 
 		writeOffset += (t.sizes[i] + 7 + int64(len(t.files[i])))
 	}
-
 	wg.Wait()
 }
 

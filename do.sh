@@ -1,73 +1,57 @@
-#!/bin/sh
-
-bench() {
-    mkdir testdata/ >/dev/null 2>&1 || echo "testdata/ already exists, skipping..." 
-    
-    if [ -z "$(ls -A testdata/)" ]; then
-        echo "testdata/ is empty, fetching test data..."
-        git clone -q https://github.com/telephrag/bscrap testdata/
-        if  [ $? -ne 0 ]; then 
-            echo "failed to fetch test data from git, aborting..." && exit 1
-        else 
-            echo "successfully fetched data"
-        fi
-    else
-        cd testdata/
-        hash="$(git rev-list --parents HEAD | tail -1)"
-        expected="19ccbd15ebd1c67f1ebe105477503e8c99afc6d0" 
-        if [[ "$hash" != "$expected" ]]; then
-            echo "testdata/ has invalid contents, aborting..."
-            exit 1
-        fi
-        cd ..
-    fi
-    
-    go test -v -bench . -benchtime=1000x # -cpuprofile cpu.out -memprofile mem.out
-    rm test_*.tur >/dev/null 2>&1
-}
+#!/bin/bash
 
 gentest() {
     rm -rf testdata || mkdir testdata
     mkdir -p testdata/input/nested/deep
 
     root="testdata/input"
-    dd if=/dev/urandom of=$root/nested/deep/tiny bs=32 count=1
-    dd if=/dev/urandom of=$root/nested/large1 bs=7197884 count=1
-    dd if=/dev/urandom of=$root/nested/medium1 bs=171572 count=1
-    dd if=/dev/urandom of=$root/large0 bs=2397171 count=1
-    dd if=/dev/urandom of=$root/medium0 bs=71536 count=1
-    touch $root/nano  # can't create with dd
-    dd if=/dev/urandom of=$root/small0 bs=100 count=1
+
+    files=(\
+        ".invisible0"\
+        "extralarge0"\
+        "large0"\
+        "medium0"\
+        "nano0"\
+        "nested/deep/extralarge1"\
+        "nested/deep/extralarge2"\
+        "nested/deep/normal0"\
+        "nested/deep/ordinary0"\
+        "nested/deep/tiny1"\
+        "nested/large1"\
+        "nested/medium1"\
+        "nested/nano1"\
+        "nested/nano2"\
+        "nested/nano3"\
+        "nested/ordinary1"\
+        "nested/temporary0"\
+        "small0")
+
+    sizes=(\
+        10243780 20971520 16373913 13308852 0\
+        17906448 19438984 7178709 4113648 1048576\
+        14841387 11776316 0 0 0 5646183 8711244\
+        2581112)
+
+
+    for i in "${!files[@]}"; do
+        if [ "${sizes[i]}" = 0 ]; then
+            touch $root/${files[$i]} # not using dd with empty file
+            continue
+        fi
+        dd if=/dev/random of=$root/${files[$i]} bs=${sizes[$i]} count=1
+    done
 
     fout="testdata/expected.tur"
     touch testdata/expected.tur
-    
-    printf '\n||| testdata/input/large0\n' >> "$fout"
-    dd if=testdata/input/large0 bs=2397171 count=1 status=none >> "$fout"
-    printf '\n' >> "$fout"
-    
-    printf '\n||| testdata/input/medium0\n' >> "$fout"
-    dd if=testdata/input/medium0 bs=71536 count=1 status=none >> "$fout" 
-    printf '\n' >> "$fout"
-    
-    printf '\n||| testdata/input/nano\n' >> "$fout"
-    printf '\n' >> "$fout"
-    
-    printf '\n||| testdata/input/nested/deep/tiny\n' >> "$fout"
-    dd if=testdata/input/nested/deep/tiny bs=32 count=1 status=none >> "$fout" 
 
-    printf '\n' >> "$fout"
-    printf '\n||| testdata/input/nested/large1\n' >> "$fout"
-    dd if=testdata/input/nested/large1 bs=7197884 count=1 status=none >> "$fout"
-    printf '\n' >> "$fout"
-    
-    printf '\n||| testdata/input/nested/medium1\n' >> "$fout"
-    dd if=testdata/input/nested/medium1 bs=171572 count=1 status=none >> "$fout"
-    printf '\n' >> "$fout"
-    
-    printf '\n||| testdata/input/small0\n' >> "$fout"
-    dd if=testdata/input/small0 bs=100 count=1 status=none >> "$fout"
-    printf '\n' >> "$fout"
+    for i in "${!files[@]}"; do
+        filename=${files[$i]}
+        printf "\n||| testdata/input/$filename\n" >> "$fout"
+        if [ ! "${sizes[i]}" = 0 ]; then
+            dd if=$root/${files[$i]} bs=${sizes[$i]} count=1 >> $fout
+        fi
+        printf "\n" >> "$fout"
+    done
 }
 
 #install() {

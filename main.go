@@ -39,5 +39,5 @@ func main() {
 		log.Fatalf("error allocating filespace for output: %s\n", err)
 	}
 
-	t.ProcessAtomicWait(fout, 0, runtime.NumCPU())
+	t.Process(fout, 0, runtime.NumCPU())
 }
