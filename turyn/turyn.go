@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"iter"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 )
 
@@ -38,10 +40,6 @@ func (t *Turyn) Gather(workDir string, wdf fs.WalkDirFunc) error {
 // Shamelessly stolen from chi
 func (t *Turyn) CheckIfDir(next fs.WalkDirFunc) fs.WalkDirFunc {
 	return fs.WalkDirFunc(func(path string, d fs.DirEntry, err error) error {
-		if d == nil {
-			panic("DirEntry is nil")
-		}
-
 		if !d.IsDir() {
 			// fmt.Println(path) // debug
 			return next(path, d, err)
@@ -119,11 +117,29 @@ func (t *Turyn) WriteFile(i int, off int64, fout *os.File) error {
 	return nil
 }
 
+// learning iterators just for fun
+func (t *Turyn) Pairs() iter.Seq2[string, int64] {
+	return func(yield func(string, int64) bool) {
+		for i := 0; i < len(t.files); i++ {
+			if !yield(t.files[i], t.sizes[i]) {
+				return
+			}
+		}
+	}
+}
+
+func (t *Turyn) ExcludeOutputFile(name string) {
+	i := slices.Index(t.files, name)
+	t.files = slices.Delete(t.files, i, i+1)
+	t.sizes = slices.Delete(t.sizes, i, i+1)
+}
+
+// Excludes output file from calculation
 func (t *Turyn) GetTotalSize() int64 {
 	var totalSize int64
-	for i := range t.sizes {
+	for file, size := range t.Pairs() {
 		// ||| + " " + filename + \n + filesize + \n\n (after contents)
-		totalSize += (7 + int64(len(t.files[i])) + t.sizes[i])
+		totalSize += (7 + int64(len(file)) + size)
 	}
 	return totalSize
 }
