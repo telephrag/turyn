@@ -7,7 +7,8 @@ import (
 	"runtime"
 	"syscall"
 	"testing"
-	"turyn/turyn"
+
+	"github.com/telephrag/turyn/turyn"
 )
 
 func BenchmarkGatherFS(b *testing.B) {

@@ -7,7 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"syscall"
-	"turyn/turyn"
+
+	"github.com/telephrag/turyn/turyn"
 )
 
 func init() { log.SetFlags(0) }
