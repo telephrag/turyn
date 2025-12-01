@@ -113,8 +113,11 @@ func BenchmarkFullChan(b *testing.B) {
 func TestFull(t *testing.T) {
 	tur := turyn.New()
 
-	tur.Gather("testdata/input/", tur.Chain([]turyn.Middleware{
+	err := tur.Gather("testdata/input/", tur.Chain([]turyn.Middleware{
 		tur.CheckIfDir, tur.CollectPathSize}...))
+	if err != nil {
+		t.Fatalf("%v: did you generate testdata via './do.sh gentest?'", err)
+	}
 
 	fgot, _ := os.OpenFile("testdata/got.tur",
 		os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0664)

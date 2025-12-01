@@ -9,10 +9,16 @@ Turyn is a CLI utility for combining multiple files into one. Writes files' cont
 # Testing
 
 Generate testdata:
-`chmod +x do.sh`
+
+```
+chmod +x do.sh
+./do.sh gentest
+```
 
 Run tests as usual:
+
 `go test`
 
 Run benchmark:
+
 `go test -bench=main`
